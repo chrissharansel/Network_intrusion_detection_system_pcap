@@ -13,7 +13,7 @@ from collections import defaultdict
 import time
 
 # Import the Network IDS
-from network_ids import NetworkIDS
+from network_ids2 import NetworkIDS
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'network-ids-secret'

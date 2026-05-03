@@ -1,17 +1,6 @@
 """
 Standalone Network Intrusion Detection System
 With PCAP Storage + ML-based Analysis on PCAP data
-
-Improvements applied:
-  1. IP Whitelisting
-  2. Alert flood control (per-type+IP cooldown)
-  3. PCAP disk protection (rolling cleanup)
-  4. Improved logging
-  5. EC2-safe interface fallback
-  6. ML training stability (cap training history)
-  7. PCAP ML loop optimisation (skip retrain on small batches)
-  8. Expanded service name mapping
-  9. Graceful shutdown safety
 """
 
 import threading
@@ -33,15 +22,9 @@ except ImportError:
     exit(1)
 
 import numpy as np
-from sklearn.ensemble import IsolationForest
+from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.pipeline import Pipeline
-
-
-# ──────────────────────────────────────────────
-# 1. IP Whitelisting
-# ──────────────────────────────────────────────
-WHITELIST_PREFIXES = ("127.", "192.168.", "10.", "172.")
 
 
 # ──────────────────────────────────────────────
@@ -59,13 +42,11 @@ class PCAPManager:
                 ...
     """
 
-    def __init__(self, pcap_dir: str = "pcap_captures",
-                 max_packets_per_file: int = 10_000,
-                 max_files: int = 20):
+    def __init__(self, pcap_dir: str = "pcap_captures", max_packets_per_file: int = 10_000):
         self.pcap_dir = pcap_dir
         self.max_packets_per_file = max_packets_per_file
-        self.max_files = max_files  # 3. disk protection
 
+        # Create session sub-folder
         session_name = f"session_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         self.session_dir = os.path.join(pcap_dir, session_name)
         os.makedirs(self.session_dir, exist_ok=True)
@@ -79,6 +60,7 @@ class PCAPManager:
 
     # ── public API ──────────────────────────────
     def write_packet(self, packet):
+        """Buffer a packet; flush to disk when buffer is full."""
         with self._lock:
             self._packet_buffer.append(packet)
             if len(self._packet_buffer) >= self.max_packets_per_file:
@@ -91,11 +73,16 @@ class PCAPManager:
                 self._flush()
 
     def load_recent_pcap(self, n_files: int = 3) -> List:
+        """
+        Load the N most-recently written PCAP files and return
+        all packets as a flat list (used by the ML analyser).
+        """
         pcap_files = sorted([
             os.path.join(self.session_dir, f)
             for f in os.listdir(self.session_dir)
             if f.endswith(".pcap")
         ])
+
         packets = []
         for fpath in pcap_files[-n_files:]:
             try:
@@ -111,16 +98,6 @@ class PCAPManager:
             if f.endswith(".pcap")
         ])
 
-    # 3. PCAP disk protection
-    def cleanup_old_pcaps(self):
-        files = self.list_files()
-        if len(files) > self.max_files:
-            for f in files[:-self.max_files]:
-                try:
-                    os.remove(f)
-                except Exception:
-                    pass
-
     # ── private helpers ──────────────────────────
     def _flush(self):
         wrpcap(self._current_file, self._packet_buffer)
@@ -128,7 +105,6 @@ class PCAPManager:
         self._packet_buffer = []
         self._file_index += 1
         self._current_file = self._new_filepath()
-        self.cleanup_old_pcaps()  # 3. enforce rolling limit
 
     def _new_filepath(self) -> str:
         return os.path.join(self.session_dir, f"capture_{self._file_index:03d}.pcap")
@@ -169,6 +145,11 @@ class PCAPFeatureExtractor:
     ]
 
     def extract(self, packets: List) -> (np.ndarray, List[str]):
+        """
+        Returns:
+            features  – shape (n_flows, 15)  float32 array
+            src_ips   – list of source IPs (one per row)
+        """
         flows: Dict[str, dict] = {}
 
         for pkt in packets:
@@ -241,10 +222,10 @@ class PCAPMLAnalyser:
     """
     Trains an IsolationForest on PCAP-derived features and
     classifies new flows as normal / anomalous.
-    """
 
-    # 6. cap training history to avoid memory growth
-    MAX_TRAINING_HISTORY = 5
+    Also provides a rule-based labeller so you can see *why*
+    a flow was flagged (port scan, SYN flood, etc.).
+    """
 
     def __init__(self):
         self.extractor = PCAPFeatureExtractor()
@@ -259,57 +240,64 @@ class PCAPMLAnalyser:
         self.trained = False
         self._training_data: List[np.ndarray] = []
 
+    # ── training ────────────────────────────────
     def train_on_pcap(self, packets: List) -> bool:
+        """Extract features from packets and (re-)fit the model."""
         X, _ = self.extractor.extract(packets)
         if len(X) < 20:
             print(f"⚠ Only {len(X)} flows – need ≥20 to train. Skipping.")
             return False
 
         self._training_data.append(X)
-
-        # 6. cap history to prevent unbounded memory growth
-        if len(self._training_data) > self.MAX_TRAINING_HISTORY:
-            self._training_data.pop(0)
-
         X_all = np.vstack(self._training_data)
+
         self.pipeline.fit(X_all)
         self.trained = True
         print(f"🤖 PCAP ML model trained on {len(X_all)} flows")
         return True
 
+    # ── inference ───────────────────────────────
     def analyse(self, packets: List) -> List[Dict]:
+        """
+        Analyse a packet list and return a list of anomaly dicts.
+        Works even before the model is trained (rule-based only).
+        """
         X, ips = self.extractor.extract(packets)
         if len(X) == 0:
             return []
 
         results = []
 
+        # ML scores (if trained)
         if self.trained:
             scores = self.pipeline.decision_function(X)
-            preds  = self.pipeline.predict(X)
+            preds  = self.pipeline.predict(X)           # -1 = anomaly
         else:
             scores = np.zeros(len(X))
             preds  = np.ones(len(X))
 
         for i, ip in enumerate(ips):
             row = X[i]
-            ml_flag    = (preds[i] == -1)
+            ml_flag   = (preds[i] == -1)
             rule_label = self._rule_label(row)
             is_anomaly = ml_flag or (rule_label != "Normal")
 
             if is_anomaly:
                 results.append({
-                    "src_ip":     ip,
-                    "ml_anomaly": bool(ml_flag),
-                    "ml_score":   float(scores[i]),
-                    "rule_label": rule_label,
-                    "features":   dict(zip(PCAPFeatureExtractor.FEATURE_NAMES, row.tolist()))
+                    "src_ip":       ip,
+                    "ml_anomaly":   bool(ml_flag),
+                    "ml_score":     float(scores[i]),
+                    "rule_label":   rule_label,
+                    "features":     dict(zip(PCAPFeatureExtractor.FEATURE_NAMES, row.tolist()))
                 })
 
         return results
 
+    # ── rule engine ─────────────────────────────
     def _rule_label(self, row: np.ndarray) -> str:
+        """Simple threshold rules to name the attack type."""
         feat = dict(zip(PCAPFeatureExtractor.FEATURE_NAMES, row.tolist()))
+
         if feat["pps"] > 1000:
             return "DDoS / High-Rate Flood"
         if feat["syn_ratio"] > 0.80 and feat["tcp_ratio"] > 0.50:
@@ -326,7 +314,7 @@ class PCAPMLAnalyser:
 
 
 # ──────────────────────────────────────────────
-# Main Network IDS
+# Main Network IDS  (original + PCAP extensions)
 # ──────────────────────────────────────────────
 class NetworkIDS:
     """
@@ -335,18 +323,19 @@ class NetworkIDS:
     """
 
     def __init__(self,
-                 interface:     str = None,
-                 alert_file:    str = "network_alerts.json",
-                 pcap_dir:      str = "pcap_captures",
-                 pcap_interval: int = 60,
-                 max_pcap_files: int = 20):
-
-        # 5. EC2-safe interface fallback
-        self.interface = interface or self._get_default_interface()
-        if not self.interface:
-            self.interface = "eth0"
-
-        self.alert_file    = alert_file
+                 interface:   str = None,
+                 alert_file:  str = "network_alerts.json",
+                 pcap_dir:    str = "pcap_captures",
+                 pcap_interval: int = 60):
+        """
+        Args:
+            interface      – NIC to monitor (auto-detect if None)
+            alert_file     – JSON file for alerts
+            pcap_dir       – root directory for PCAP files
+            pcap_interval  – how often (seconds) to run PCAP ML analysis
+        """
+        self.interface    = interface or self._get_default_interface()
+        self.alert_file   = alert_file
         self.pcap_interval = pcap_interval
 
         self.running         = False
@@ -354,7 +343,7 @@ class NetworkIDS:
         self.analysis_thread = None
         self.pcap_ml_thread  = None
 
-        # 4. Improved logging
+        # ── Logging ─────────────────────────────────
         self.logger = logging.getLogger("NetworkIDS")
         self.logger.setLevel(logging.INFO)
         if not self.logger.handlers:
@@ -362,13 +351,12 @@ class NetworkIDS:
             h.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
             self.logger.addHandler(h)
         self.logger.info("Network IDS Initialized")
-        self.logger.info(f"Started on interface {self.interface}")  # 4.
 
-        # PCAP layer
-        self.pcap_manager  = PCAPManager(pcap_dir=pcap_dir, max_files=max_pcap_files)
+        # ── PCAP layer ───────────────────────────────
+        self.pcap_manager  = PCAPManager(pcap_dir=pcap_dir)
         self.pcap_analyser = PCAPMLAnalyser()
 
-        # Connection tracking
+        # ── Connection tracking ──────────────────────
         self.connections = defaultdict(lambda: {
             'packet_count': 0, 'syn_count': 0, 'ack_count': 0,
             'fin_count': 0, 'rst_count': 0, 'udp_count': 0,
@@ -380,6 +368,7 @@ class NetworkIDS:
             'protocols': defaultdict(int)
         })
 
+        # ── Thresholds ───────────────────────────────
         self.thresholds = {
             'ddos_pps': 1000, 'ddos_connections': 100,
             'syn_flood_ratio': 3.0,
@@ -390,6 +379,7 @@ class NetworkIDS:
             'anomaly_packet_size': 1500, 'anomaly_connection_rate': 50
         }
 
+        # ── Stats & alerts ───────────────────────────
         self.stats = {
             'total_packets': 0, 'total_bytes': 0,
             'tcp_packets': 0, 'udp_packets': 0,
@@ -400,14 +390,12 @@ class NetworkIDS:
         self.alerts       = deque(maxlen=1000)
         self.alert_counts = defaultdict(int)
 
-        # Live ML anomaly detector
+        # ── Live ML anomaly detector ─────────────────
         self.anomaly_detector = IsolationForest(
             contamination=0.1, random_state=42, n_estimators=100)
-        self.ml_trained      = False
+        self.ml_trained     = False
         self.training_buffer = deque(maxlen=500)
-        self.ml_enabled      = True
-
-        # 2. Unified alert cooldown (per attack_type + src_ip)
+        self.ml_enabled     = True
         self.anomaly_cooldown: Dict[str, float] = {}
 
         print(f"""
@@ -420,12 +408,6 @@ class NetworkIDS:
 ║  PCAP ML    : every {pcap_interval}s                              ║
 ╚══════════════════════════════════════════════════════════╝
         """)
-
-    # ════════════════════════════════════════════
-    # 1. IP Whitelisting helper
-    # ════════════════════════════════════════════
-    def _is_whitelisted(self, ip: str) -> bool:
-        return any(ip.startswith(p) for p in WHITELIST_PREFIXES)
 
     # ════════════════════════════════════════════
     # Start / Stop
@@ -461,9 +443,7 @@ class NetworkIDS:
         self.running = False
         self.logger.info("IDS Stopped")
 
-        # 9. Graceful shutdown – flush before joining threads
-        self.pcap_manager.flush_all()
-        self.logger.info("Flushed remaining PCAP data")
+        self.pcap_manager.flush_all()   # Save remaining buffered packets
 
         for t in (self.capture_thread, self.analysis_thread, self.pcap_ml_thread):
             if t:
@@ -494,6 +474,8 @@ class NetworkIDS:
     def _process_packet(self, packet):
         try:
             self.stats['total_packets'] += 1
+
+            # ── Write to PCAP ──────────────────────
             self.pcap_manager.write_packet(packet)
 
             if IP in packet:
@@ -570,11 +552,17 @@ class NetworkIDS:
                 print(f"Analysis error: {e}")
 
     # ════════════════════════════════════════════
-    # PCAP ML Loop
+    # PCAP ML Loop  ← NEW
     # ════════════════════════════════════════════
     def _pcap_ml_loop(self):
+        """
+        Every `pcap_interval` seconds:
+          1. Load the most recent PCAP files
+          2. (Re-)train the PCAP ML model on that data
+          3. Run inference and raise alerts for anomalous flows
+        """
         print(f"🧠 PCAP ML engine started (interval={self.pcap_interval}s)\n")
-        time.sleep(self.pcap_interval)
+        time.sleep(self.pcap_interval)  # Wait for initial capture data
 
         while self.running:
             try:
@@ -583,9 +571,11 @@ class NetworkIDS:
                 print(f"PCAP ML error: {e}")
             time.sleep(self.pcap_interval)
 
+        # Final analysis on shutdown
         self._run_pcap_ml_analysis()
 
     def _run_pcap_ml_analysis(self):
+        """Load PCAP files, train, analyse, and emit alerts."""
         pcap_files = self.pcap_manager.list_files()
         if not pcap_files:
             return
@@ -599,10 +589,10 @@ class NetworkIDS:
 
         print(f"📂 PCAP ML: {len(packets):,} packets loaded → extracting features …")
 
-        # 7. Only (re-)train when there's enough new data
-        if not self.pcap_analyser.trained or len(packets) > 500:
-            self.pcap_analyser.train_on_pcap(packets)
+        # Train / retrain
+        self.pcap_analyser.train_on_pcap(packets)
 
+        # Analyse
         anomalies = self.pcap_analyser.analyse(packets)
 
         if not anomalies:
@@ -621,20 +611,18 @@ class NetworkIDS:
                     'ml_score':    round(a['ml_score'], 4),
                     'rule_label':  a['rule_label'],
                     'pps':         round(a['features'].get('pps', 0), 2),
-                    'unique_ports': int(a['features'].get('unique_dst_ports', 0)),
+                    'unique_ports':int(a['features'].get('unique_dst_ports', 0)),
                     'syn_ratio':   round(a['features'].get('syn_ratio', 0), 3),
                     'description': 'Detected via PCAP feature extraction + IsolationForest'
                 }
             )
 
     # ════════════════════════════════════════════
-    # Real-time Detection Methods
+    # Real-time Detection Methods (unchanged)
     # ════════════════════════════════════════════
     def _detect_ddos(self):
         current_time = time.time()
         for ip, conn in list(self.connections.items()):
-            if self._is_whitelisted(ip):   # 1.
-                continue
             recent = [t for t in conn['packet_timestamps'] if t > current_time - 5]
             if len(recent) > 50:
                 pps = len(recent) / 5
@@ -648,8 +636,6 @@ class NetworkIDS:
 
     def _detect_syn_flood(self):
         for ip, conn in list(self.connections.items()):
-            if self._is_whitelisted(ip):   # 1.
-                continue
             if conn['syn_count'] > 50 and conn['ack_count'] > 0:
                 ratio = conn['syn_count'] / max(conn['ack_count'], 1)
                 if ratio > self.thresholds['syn_flood_ratio']:
@@ -664,8 +650,6 @@ class NetworkIDS:
 
     def _detect_udp_flood(self):
         for ip, conn in list(self.connections.items()):
-            if self._is_whitelisted(ip):   # 1.
-                continue
             if conn['udp_count'] > self.thresholds['udp_flood_pps']:
                 self._create_alert(
                     attack_type='UDP Flood Attack', src_ip=ip,
@@ -676,8 +660,6 @@ class NetworkIDS:
 
     def _detect_icmp_flood(self):
         for ip, conn in list(self.connections.items()):
-            if self._is_whitelisted(ip):   # 1.
-                continue
             if conn['icmp_count'] > self.thresholds['icmp_flood_pps']:
                 self._create_alert(
                     attack_type='ICMP Flood (Ping Flood)', src_ip=ip,
@@ -689,8 +671,6 @@ class NetworkIDS:
     def _detect_port_scans(self):
         now = datetime.now()
         for ip, conn in list(self.connections.items()):
-            if self._is_whitelisted(ip):   # 1.
-                continue
             diff = (now - conn['first_seen']).total_seconds()
             if diff < self.thresholds['port_scan_time']:
                 ports = len(conn['ports_accessed'])
@@ -708,8 +688,6 @@ class NetworkIDS:
     def _detect_brute_force(self):
         now = time.time()
         for ip, conn in list(self.connections.items()):
-            if self._is_whitelisted(ip):   # 1.
-                continue
             sensitive = conn['ports_accessed'].intersection(self.thresholds['brute_force_ports'])
             if sensitive:
                 recent = [t for t in conn['packet_timestamps'] if t > now - 60]
@@ -729,8 +707,6 @@ class NetworkIDS:
         now = time.time()
 
         for ip, conn in list(self.connections.items()):
-            if self._is_whitelisted(ip):   # 1.
-                continue
             if conn['packet_count'] < 100:
                 continue
             dur  = max(now - conn['packet_timestamps'][0], 1)
@@ -746,8 +722,8 @@ class NetworkIDS:
             self.training_buffer.append([pps, bps, avg, std, syn, upts, tu])
 
         if self.ml_trained and features_list:
-            scores = self.anomaly_detector.decision_function(features_list)
-            preds  = self.anomaly_detector.predict(features_list)
+            scores  = self.anomaly_detector.decision_function(features_list)
+            preds   = self.anomaly_detector.predict(features_list)
             for i, pred in enumerate(preds):
                 if pred == -1:
                     ip = ip_list[i]
@@ -781,13 +757,6 @@ class NetworkIDS:
             del self.connections[ip]
 
     def _create_alert(self, attack_type, src_ip, severity, confidence, details):
-        # 2. Unified alert flood control (per attack_type + src_ip)
-        key = f"{attack_type}_{src_ip}"
-        now = time.time()
-        if key in self.anomaly_cooldown and now - self.anomaly_cooldown[key] < 60:
-            return
-        self.anomaly_cooldown[key] = now
-
         alert = {
             'timestamp':   datetime.now().isoformat(),
             'attack_type': attack_type,
@@ -802,9 +771,6 @@ class NetworkIDS:
         self.stats['alerts_generated'] += 1
         self._print_alert(alert)
         self._save_alert(safe)
-
-        # 4. Log every alert
-        self.logger.warning(f"{attack_type} | {src_ip} | {details}")
 
     def _print_alert(self, alert):
         colors = {'Critical': '\033[91m', 'High': '\033[93m',
@@ -877,34 +843,25 @@ class NetworkIDS:
             print(f"    {at:45s} {cnt:5d}")
         print("╚══════════════════════════════════════════════════════════╝")
 
-    # 8. Expanded service name mapping
     def _identify_services(self, ports: set) -> str:
-        svc = {
-            21: 'FTP', 22: 'SSH', 23: 'Telnet', 25: 'SMTP',
-            53: 'DNS', 80: 'HTTP', 110: 'POP3', 143: 'IMAP',
-            443: 'HTTPS', 1433: 'MSSQL', 3306: 'MySQL',
-            3389: 'RDP', 5432: 'PostgreSQL', 8080: 'HTTP-Alt',
-            27017: 'MongoDB'
-        }
+        svc = {22:'SSH',21:'FTP',23:'Telnet',25:'SMTP',80:'HTTP',
+               443:'HTTPS',3306:'MySQL',5432:'PostgreSQL',3389:'RDP',
+               1433:'MSSQL',27017:'MongoDB'}
         return ', '.join(svc.get(p, f'Port {p}') for p in ports)
 
-    # 5. EC2-safe interface detection
     def _get_default_interface(self) -> str:
-        try:
-            from scapy.all import get_if_list, get_if_addr
-            for iface in get_if_list():
-                try:
-                    ip = get_if_addr(iface)
-                    if not ip or ip.startswith(("127.", "0.0.0.0", "169.254.")):
-                        continue
-                    if ip.startswith(("192.168.", "10.", "172.")):
-                        print(f"✓ Auto-selected: {iface} ({ip})")
-                        return iface
-                except Exception:
+        from scapy.all import get_if_list, get_if_addr
+        for iface in get_if_list():
+            try:
+                ip = get_if_addr(iface)
+                if not ip or ip.startswith(("127.", "0.0.0.0", "169.254.")):
                     continue
-        except Exception:
-            pass
-        return None   # caller falls back to "eth0"
+                if ip.startswith(("192.168.", "10.", "172.")):
+                    print(f"✓ Auto-selected: {iface} ({ip})")
+                    return iface
+            except Exception:
+                continue
+        raise RuntimeError("No suitable network interface found")
 
 
 # ════════════════════════════════════════════════════════════
@@ -914,19 +871,18 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description='Network IDS with PCAP + ML')
-    parser.add_argument('-i', '--interface',    help='Network interface (auto if omitted)')
-    parser.add_argument('-o', '--output',       default='network_alerts.json',
+    parser.add_argument('-i', '--interface', help='Network interface (auto if omitted)')
+    parser.add_argument('-o', '--output',    default='network_alerts.json',
                         help='Alert JSON file')
-    parser.add_argument('-p', '--pcap-dir',     default='pcap_captures',
+    parser.add_argument('-p', '--pcap-dir',  default='pcap_captures',
                         help='Directory for PCAP files')
-    parser.add_argument('--pcap-interval',      type=int, default=60,
+    parser.add_argument('--pcap-interval',   type=int, default=60,
                         help='Seconds between PCAP ML analyses (default 60)')
-    parser.add_argument('--max-pcap-files',     type=int, default=20,
-                        help='Max PCAP files to keep on disk (default 20)')
-    parser.add_argument('--analyse-pcap',       help='Analyse an existing PCAP file and exit')
+    # Offline PCAP analysis mode
+    parser.add_argument('--analyse-pcap',    help='Analyse an existing PCAP file and exit')
     args = parser.parse_args()
 
-    # Offline mode
+    # ── Offline mode ──────────────────────────────
     if args.analyse_pcap:
         print(f"\n🔍 Offline PCAP analysis: {args.analyse_pcap}")
         from scapy.all import rdpcap
@@ -945,13 +901,12 @@ def main():
             print("✅ No anomalies detected.")
         return
 
-    # Live mode
+    # ── Live mode ─────────────────────────────────
     ids = NetworkIDS(
         interface=args.interface,
         alert_file=args.output,
         pcap_dir=args.pcap_dir,
-        pcap_interval=args.pcap_interval,
-        max_pcap_files=args.max_pcap_files,
+        pcap_interval=args.pcap_interval
     )
 
     if ids.start():
