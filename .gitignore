@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+pcap_captures/
+network_alerts.json
+network_ids.log
+.vscode/
