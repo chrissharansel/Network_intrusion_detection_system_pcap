@@ -1,5 +1,5 @@
-scapy
-numpy
-scikit-learn
-flask
-flask-socketio
+scapy==2.7.0
+numpy==1.26.4
+scikit-learn==1.3.2
+Flask==2.3.0
+Flask-SocketIO==5.3.5

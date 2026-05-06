@@ -1,352 +1,5 @@
 [
   {
-    "timestamp": "2026-02-22T19:10:26.398819",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 172,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:28.513633",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:30.597484",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:32.672833",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:34.854426",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:36.932654",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:39.017606",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:41.096947",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:43.165539",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:45.230431",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:47.306795",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:49.431962",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:51.514461",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:53.586135",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:55.681451",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:57.771817",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:59.873662",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:10:59.940488",
-    "attack_type": "Network Anomaly (Live ML)",
-    "src_ip": "34.120.52.64",
-    "severity": "Medium",
-    "confidence": 0.03677017246482561,
-    "details": {
-      "anomaly_score": -0.03677017246482561,
-      "pps": 0.49,
-      "description": "Live IsolationForest flagged abnormal traffic"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:11:02.014973",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:11:04.077017",
-    "attack_type": "Brute Force Attack",
-    "src_ip": "192.168.43.28",
-    "severity": "High",
-    "confidence": 0.88,
-    "details": {
-      "connection_attempts": 200,
-      "target_ports": [
-        21,
-        22,
-        23
-      ],
-      "services": "FTP, SSH, Telnet",
-      "description": "Repeated authentication attempts"
-    }
-  },
-  {
-    "timestamp": "2026-02-22T19:11:04.192877",
-    "attack_type": "Network Anomaly (Live ML)",
-    "src_ip": "192.168.43.242",
-    "severity": "Medium",
-    "confidence": 0.02259634296909785,
-    "details": {
-      "anomaly_score": -0.02259634296909785,
-      "pps": 4.67,
-      "description": "Live IsolationForest flagged abnormal traffic"
-    }
-  },
-  {
     "timestamp": "2026-02-22T19:11:06.259679",
     "attack_type": "Brute Force Attack",
     "src_ip": "192.168.43.28",
@@ -14471,6 +14124,38 @@
     }
   },
   {
+    "timestamp": "2026-02-23T07:59:10.521598",
+    "attack_type": "PCAP-ML: DDoS / High-Rate Flood",
+    "src_ip": "52.110.16.168",
+    "severity": "Medium",
+    "confidence": 0.75,
+    "details": {
+      "ml_anomaly": false,
+      "ml_score": 0.0617,
+      "rule_label": "DDoS / High-Rate Flood",
+      "pps": 1000000.0,
+      "unique_ports": 1,
+      "syn_ratio": 0.0,
+      "description": "Detected via PCAP feature extraction + IsolationForest"
+    }
+  },
+  {
+    "timestamp": "2026-02-23T07:59:10.776465",
+    "attack_type": "PCAP-ML: SYN Flood",
+    "src_ip": "52.182.141.63",
+    "severity": "Medium",
+    "confidence": 0.75,
+    "details": {
+      "ml_anomaly": false,
+      "ml_score": 0.1306,
+      "rule_label": "SYN Flood",
+      "pps": 1.88,
+      "unique_ports": 2,
+      "syn_ratio": 1.0,
+      "description": "Detected via PCAP feature extraction + IsolationForest"
+    }
+  },
+  {
     "timestamp": "2026-02-23T07:59:11.365864",
     "attack_type": "Brute Force Attack",
     "src_ip": "10.196.49.246",
@@ -14484,9 +14169,231 @@
       "services": "SSH",
       "description": "Repeated authentication attempts"
     }
-  }
-],"n_ratio": 0.0,
+  },
+  {
+    "timestamp": "2026-02-23T07:59:11.365864",
+    "attack_type": "PCAP ML Detection",
+    "severity": "Low",
+    "confidence": 0.0,
+    "details": {
+      "n_ratio": 0.0,
       "description": "Detected via PCAP feature extraction + IsolationForest"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:55:07.816292",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "199.232.210.172",
+    "severity": "Medium",
+    "confidence": 0.019293964264620378,
+    "details": {
+      "anomaly_score": -0.019293964264620378,
+      "pps": 18.77,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:55:16.059944",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "132.196.74.212",
+    "severity": "Medium",
+    "confidence": 0.04650878893105925,
+    "details": {
+      "anomaly_score": -0.04650878893105925,
+      "pps": 4.77,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:55:42.517266",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "172.30.11.247",
+    "severity": "Medium",
+    "confidence": 0.08270502078519437,
+    "details": {
+      "anomaly_score": -0.08270502078519437,
+      "pps": 633.4,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:55:42.742178",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "14.102.231.202",
+    "severity": "Medium",
+    "confidence": 0.10392312096983713,
+    "details": {
+      "anomaly_score": -0.10392312096983713,
+      "pps": 233.8,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:56:09.019088",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "199.232.210.172",
+    "severity": "Medium",
+    "confidence": 0.024168867595098398,
+    "details": {
+      "anomaly_score": -0.024168867595098398,
+      "pps": 16.45,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:56:17.202598",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "132.196.74.212",
+    "severity": "Medium",
+    "confidence": 0.01791410761407919,
+    "details": {
+      "anomaly_score": -0.01791410761407919,
+      "pps": 1.95,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:56:43.493225",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "14.102.231.202",
+    "severity": "Medium",
+    "confidence": 0.024863099614610418,
+    "details": {
+      "anomaly_score": -0.024863099614610418,
+      "pps": 4.3,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:57:09.745200",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "199.232.210.172",
+    "severity": "Medium",
+    "confidence": 0.025717340987180815,
+    "details": {
+      "anomaly_score": -0.025717340987180815,
+      "pps": 7.03,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:57:17.938300",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "132.196.74.212",
+    "severity": "Medium",
+    "confidence": 0.017729630834828147,
+    "details": {
+      "anomaly_score": -0.017729630834828147,
+      "pps": 1.13,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:57:44.229340",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "14.102.231.202",
+    "severity": "Medium",
+    "confidence": 0.02352010106319713,
+    "details": {
+      "anomaly_score": -0.02352010106319713,
+      "pps": 2.17,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:58:10.529921",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "199.232.210.172",
+    "severity": "Medium",
+    "confidence": 0.023900151107427825,
+    "details": {
+      "anomaly_score": -0.023900151107427825,
+      "pps": 4.47,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:58:18.754049",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "132.196.74.212",
+    "severity": "Medium",
+    "confidence": 0.021324155731276995,
+    "details": {
+      "anomaly_score": -0.021324155731276995,
+      "pps": 0.79,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:58:45.038708",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "14.102.231.202",
+    "severity": "Medium",
+    "confidence": 0.02352010106319713,
+    "details": {
+      "anomaly_score": -0.02352010106319713,
+      "pps": 1.45,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:59:11.363245",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "199.232.210.172",
+    "severity": "Medium",
+    "confidence": 0.023900151107427825,
+    "details": {
+      "anomaly_score": -0.023900151107427825,
+      "pps": 3.27,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:59:19.513033",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "132.196.74.212",
+    "severity": "Medium",
+    "confidence": 0.021324155731276995,
+    "details": {
+      "anomaly_score": -0.021324155731276995,
+      "pps": 0.61,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T22:59:45.832985",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "14.102.231.202",
+    "severity": "Medium",
+    "confidence": 0.023333865232669004,
+    "details": {
+      "anomaly_score": -0.023333865232669004,
+      "pps": 1.09,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T23:00:12.094465",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "199.232.210.172",
+    "severity": "Medium",
+    "confidence": 0.023900151107427825,
+    "details": {
+      "anomaly_score": -0.023900151107427825,
+      "pps": 2.58,
+      "description": "Live IsolationForest flagged abnormal traffic"
+    }
+  },
+  {
+    "timestamp": "2026-05-04T23:00:20.273974",
+    "attack_type": "Network Anomaly (Live ML)",
+    "src_ip": "132.196.74.212",
+    "severity": "Medium",
+    "confidence": 0.021324155731276995,
+    "details": {
+      "anomaly_score": -0.021324155731276995,
+      "pps": 0.5,
+      "description": "Live IsolationForest flagged abnormal traffic"
     }
   }
 ]
