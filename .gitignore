@@ -3,3 +3,5 @@ __pycache__/
 pcap_captures/
 network_ids.log
 .vscode/
+ids_new\pcap_captures
+venv
