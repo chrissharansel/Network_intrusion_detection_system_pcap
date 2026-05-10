@@ -1,0 +1,209 @@
+[
+  {
+    "timestamp": "2026-05-10T06:46:42.118683Z",
+    "attack_type": "Suspicious Payload Entropy",
+    "src_ip": "192.168.43.243",
+    "severity": "Medium",
+    "confidence": 0.8,
+    "details": {
+      "entropy": 7.649,
+      "dport": 443,
+      "reason": "Encrypted/compressed payload (possible covert channel)"
+    },
+    "geo": {},
+    "reputation": 0.0,
+    "composite_score": 0.0
+  },
+  {
+    "timestamp": "2026-05-10T06:47:09.540252Z",
+    "attack_type": "Suspicious Payload Entropy",
+    "src_ip": "140.82.112.21",
+    "severity": "Medium",
+    "confidence": 0.8,
+    "details": {
+      "entropy": 7.831,
+      "dport": 13778,
+      "reason": "Encrypted/compressed payload (possible covert channel)"
+    },
+    "geo": {},
+    "reputation": 0.0,
+    "composite_score": 0.0
+  },
+  {
+    "timestamp": "2026-05-10T06:47:12.014842Z",
+    "attack_type": "DDoS / High-Rate Flood",
+    "src_ip": "140.82.112.21",
+    "severity": "Critical",
+    "confidence": 0.95,
+    "details": {
+      "pps": "29",
+      "description": "Abnormally high packet rate"
+    },
+    "geo": {},
+    "reputation": 0.05,
+    "composite_score": 10.0
+  },
+  {
+    "timestamp": "2026-05-10T06:47:12.815769Z",
+    "attack_type": "Suspicious Payload Entropy",
+    "src_ip": "34.111.220.252",
+    "severity": "Medium",
+    "confidence": 0.8,
+    "details": {
+      "entropy": 7.921,
+      "dport": 37784,
+      "reason": "Encrypted/compressed payload (possible covert channel)"
+    },
+    "geo": {},
+    "reputation": 0.0,
+    "composite_score": 0.0
+  },
+  {
+    "timestamp": "2026-05-10T06:47:47.225040Z",
+    "attack_type": "Suspicious Payload Entropy",
+    "src_ip": "192.168.43.243",
+    "severity": "Medium",
+    "confidence": 0.8,
+    "details": {
+      "entropy": 7.738,
+      "dport": 443,
+      "reason": "Encrypted/compressed payload (possible covert channel)"
+    },
+    "geo": {},
+    "reputation": 0.05,
+    "composite_score": 9.5
+  },
+  {
+    "timestamp": "2026-05-10T06:47:47.426019Z",
+    "attack_type": "Suspicious Payload Entropy",
+    "src_ip": "150.171.110.85",
+    "severity": "Medium",
+    "confidence": 0.8,
+    "details": {
+      "entropy": 7.821,
+      "dport": 48627,
+      "reason": "Encrypted/compressed payload (possible covert channel)"
+    },
+    "geo": {},
+    "reputation": 0.0,
+    "composite_score": 0.0
+  },
+  {
+    "timestamp": "2026-05-10T06:47:48.163283Z",
+    "attack_type": "DDoS / High-Rate Flood",
+    "src_ip": "150.171.110.85",
+    "severity": "Critical",
+    "confidence": 0.95,
+    "details": {
+      "pps": "12",
+      "description": "Abnormally high packet rate"
+    },
+    "geo": {},
+    "reputation": 0.05,
+    "composite_score": 10.0
+  },
+  {
+    "timestamp": "2026-05-10T06:47:54.282130Z",
+    "attack_type": "Suspicious Payload Entropy",
+    "src_ip": "142.250.77.106",
+    "severity": "Medium",
+    "confidence": 0.8,
+    "details": {
+      "entropy": 7.841,
+      "dport": 3757,
+      "reason": "Encrypted/compressed payload (possible covert channel)"
+    },
+    "geo": {},
+    "reputation": 0.0,
+    "composite_score": 0.0
+  },
+  {
+    "timestamp": "2026-05-10T06:47:54.513711Z",
+    "attack_type": "Suspicious Payload Entropy",
+    "src_ip": "151.101.1.229",
+    "severity": "Medium",
+    "confidence": 0.8,
+    "details": {
+      "entropy": 7.911,
+      "dport": 26702,
+      "reason": "Encrypted/compressed payload (possible covert channel)"
+    },
+    "geo": {},
+    "reputation": 0.0,
+    "composite_score": 0.0
+  },
+  {
+    "timestamp": "2026-05-10T06:47:55.313624Z",
+    "attack_type": "Suspicious Payload Entropy",
+    "src_ip": "142.250.182.67",
+    "severity": "Medium",
+    "confidence": 0.8,
+    "details": {
+      "entropy": 7.82,
+      "dport": 8521,
+      "reason": "Encrypted/compressed payload (possible covert channel)"
+    },
+    "geo": {},
+    "reputation": 0.0,
+    "composite_score": 0.0
+  },
+  {
+    "timestamp": "2026-05-10T06:47:56.232053Z",
+    "attack_type": "DDoS / High-Rate Flood",
+    "src_ip": "151.101.1.229",
+    "severity": "Critical",
+    "confidence": 0.95,
+    "details": {
+      "pps": "15",
+      "description": "Abnormally high packet rate"
+    },
+    "geo": {},
+    "reputation": 0.05,
+    "composite_score": 10.0
+  },
+  {
+    "timestamp": "2026-05-10T06:47:56.540425Z",
+    "attack_type": "Suspicious Payload Entropy",
+    "src_ip": "104.208.16.95",
+    "severity": "Medium",
+    "confidence": 0.8,
+    "details": {
+      "entropy": 7.816,
+      "dport": 28739,
+      "reason": "Encrypted/compressed payload (possible covert channel)"
+    },
+    "geo": {},
+    "reputation": 0.0,
+    "composite_score": 0.0
+  },
+  {
+    "timestamp": "2026-05-10T06:48:28.598084Z",
+    "attack_type": "Suspicious Payload Entropy",
+    "src_ip": "172.217.24.101",
+    "severity": "Medium",
+    "confidence": 0.8,
+    "details": {
+      "entropy": 7.84,
+      "dport": 31484,
+      "reason": "Encrypted/compressed payload (possible covert channel)"
+    },
+    "geo": {},
+    "reputation": 0.0,
+    "composite_score": 0.0
+  },
+  {
+    "timestamp": "2026-05-10T06:48:57.933155Z",
+    "attack_type": "Suspicious Payload Entropy",
+    "src_ip": "192.168.43.243",
+    "severity": "Medium",
+    "confidence": 0.8,
+    "details": {
+      "entropy": -0.0,
+      "dport": 5228,
+      "reason": "Near-zero entropy plaintext on unusual port"
+    },
+    "geo": {},
+    "reputation": 0.1,
+    "composite_score": 18.5
+  }
+]
