@@ -7,17 +7,17 @@ interface: null
 
 # Alert output
 alert_file: network_alerts.json
-log_file:   network_ids.log
-log_level:  INFO        # DEBUG | INFO | WARNING | ERROR
+log_file: network_ids.log
+log_level: INFO # DEBUG | INFO | WARNING | ERROR
 
 # PCAP settings
-pcap_dir:        pcap_captures
-pcap_interval:   60       # seconds between PCAP ML analyses
-max_pcap_files:  20       # rolling file limit (disk protection)
+pcap_dir: pcap_captures
+pcap_interval: 60 # seconds between PCAP ML analyses
+max_pcap_files: 20 # rolling file limit (disk protection)
 
 # REST API + Prometheus metrics
-enable_api:    true
-metrics_port:  9001
+enable_api: true
+metrics_port: 9001
 # curl http://localhost:9001/metrics
 # curl http://localhost:9001/stats
 # curl http://localhost:9001/threats
@@ -26,19 +26,19 @@ metrics_port:  9001
 # ── Whitelists ────────────────────────────────
 # Individual IPs or CIDR blocks to skip all detection
 whitelist_ips:
-  - "192.168.1.1"    # gateway
+  - "192.168.1.1" # gateway
   # - "10.0.0.50"    # monitoring server
 
-whitelist_cidrs:
+whitelist_cidrs: []
   # - "10.10.0.0/24"
 
 # ── Threat Intelligence ───────────────────────
 # Path to a local blocklist (one IP/CIDR per line, # for comments)
 # e.g. download from: https://feodotracker.abuse.ch/downloads/ipblocklist.txt
-threat_intel_file: null   # e.g. "blocklists/feodo.txt"
+threat_intel_file: null # e.g. "blocklists/feodo.txt"
 
 # MaxMind GeoLite2-City.mmdb path (free with signup at maxmind.com)
-geoip_db: null            # e.g. "GeoLite2-City.mmdb"
+geoip_db: null # e.g. "GeoLite2-City.mmdb"
 
 # ── Webhook Alerting ─────────────────────────
 # Supports: slack | pagerduty | generic (HTTP POST)
@@ -62,45 +62,45 @@ webhooks: []
 # ── Elasticsearch / OpenSearch ────────────────
 elasticsearch:
   enabled: false
-  url:     "http://localhost:9200"
-  index:   "network-ids"
+  url: "http://localhost:9200"
+  index: "network-ids"
 
 # ── Redis (shared state across instances) ─────
 redis:
   enabled: false
-  host:    "localhost"
-  port:    6379
+  host: "localhost"
+  port: 6379
 
 # ── Detection Thresholds ──────────────────────
 thresholds:
   # DDoS
-  ddos_pps:             1000   # packets/sec to trigger DDoS alert
+  ddos_pps: 1000 # packets/sec to trigger DDoS alert
   # SYN flood
-  syn_flood_ratio:      3.0    # SYN:ACK ratio threshold
+  syn_flood_ratio: 3.0 # SYN:ACK ratio threshold
   # UDP flood
-  udp_flood_pps:        500
+  udp_flood_pps: 500
   # ICMP flood
-  icmp_flood_pps:       10
+  icmp_flood_pps: 10
   # Port scan
-  port_scan_ports:      15     # unique ports in port_scan_time seconds
-  port_scan_time:       10
+  port_scan_ports: 15 # unique ports in port_scan_time seconds
+  port_scan_time: 10
   # Brute force
-  brute_force_attempts: 30     # connections per 60s on sensitive ports
+  brute_force_attempts: 30 # connections per 60s on sensitive ports
   # DNS
-  dns_entropy_threshold: 3.5   # Shannon entropy threshold for DNS tunnelling
-  dns_query_rate:        50    # queries per 10s
+  dns_entropy_threshold: 3.5 # Shannon entropy threshold for DNS tunnelling
+  dns_query_rate: 50 # queries per 10s
   # C2 beaconing
-  beacon_min_intervals:  8     # minimum intervals before checking regularity
-  beacon_cv_threshold:   0.15  # CV < this → beaconing suspected
+  beacon_min_intervals: 8 # minimum intervals before checking regularity
+  beacon_cv_threshold: 0.15 # CV < this → beaconing suspected
   # Payload
-  payload_entropy_high:  7.2   # bits; near-random → encrypted covert channel
+  payload_entropy_high: 7.2 # bits; near-random → encrypted covert channel
   # Alert deduplication
-  anomaly_cooldown_s:    60
-  alert_history_max:     1000
+  anomaly_cooldown_s: 60
+  alert_history_max: 1000
 
 # ── ML Settings ──────────────────────────────
 ml:
-  ensemble_contamination: 0.05   # expected anomaly fraction (0-0.5)
-  ueba_window_hours:       24
-  retrain_interval_s:      300
-  min_train_samples:       50
+  ensemble_contamination: 0.05 # expected anomaly fraction (0-0.5)
+  ueba_window_hours: 24
+  retrain_interval_s: 300
+  min_train_samples: 50
