@@ -2386,6 +2386,789 @@
 #             ids_instance.stop()
 
 
+# """
+# Advanced Network IDS — Web Dashboard v2.1
+# Fixed: _patch_ids_alerts now passes **kwargs so cooldown_key etc. work correctly.
+# """
+
+# import threading
+# import time
+# import json
+# import os
+# import sys
+# import argparse
+# from datetime import datetime
+# from collections import defaultdict, deque
+# from typing import Optional
+
+# from flask import Flask, jsonify, request
+# from flask_socketio import SocketIO, emit
+
+# try:
+#     from network_ids_advanced import AdvancedNetworkIDS, load_config
+# except ImportError:
+#     print("❌  network_ids_advanced.py not found in the same directory.")
+#     sys.exit(1)
+
+# # ─────────────────────────────────────────────────────────────────────
+# app = Flask(__name__)
+# app.config['SECRET_KEY'] = os.environ.get('IDS_SECRET', 'change-me-in-production')
+# socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading',
+#                     logger=False, engineio_logger=False)
+
+# ids_instance: Optional[AdvancedNetworkIDS] = None
+# ids_running = False
+
+# TIMELINE_LEN = 120
+# timeline_lock    = threading.Lock()
+# timeline_pps:    deque = deque([0.0] * TIMELINE_LEN, maxlen=TIMELINE_LEN)
+# timeline_bps:    deque = deque([0.0] * TIMELINE_LEN, maxlen=TIMELINE_LEN)
+# timeline_alerts: deque = deque([0]   * TIMELINE_LEN, maxlen=TIMELINE_LEN)
+# timeline_labels: deque = deque(['']  * TIMELINE_LEN, maxlen=TIMELINE_LEN)
+
+# _last_pkt_count   = 0
+# _last_byte_count  = 0
+# _last_alert_count = 0
+# _last_tick_time   = time.time()
+
+
+# # ── Alert hook ────────────────────────────────────────────────────────
+# def _alert_hook(alert: dict):
+#     try:
+#         socketio.emit('new_alert', alert, namespace='/')
+#     except Exception:
+#         pass
+
+
+# def _patch_ids_alerts(ids: AdvancedNetworkIDS):
+#     """
+#     Wraps ids._alert so every fired alert is also broadcast to the dashboard.
+
+#     IMPORTANT: the wrapper must accept *args and **kwargs so it is transparent
+#     to any signature changes in _alert (e.g. the keyword-only cooldown_key,
+#     cooldown_override args added in v2.1).
+#     """
+#     _orig = ids._alert
+
+#     def patched(*args, **kwargs):
+#         # Call the real _alert — this handles cooldown, dedup, saving, etc.
+#         _orig(*args, **kwargs)
+#         # After it returns, the last entry in ids.alerts (if any) is the new one.
+#         if ids.alerts:
+#             _alert_hook(dict(ids.alerts[-1]))
+
+#     ids._alert = patched
+
+
+# # ── Background broadcaster ────────────────────────────────────────────
+# def _broadcaster():
+#     global _last_pkt_count, _last_byte_count, _last_alert_count, _last_tick_time
+
+#     while ids_running:
+#         time.sleep(1)
+#         if not ids_instance:
+#             continue
+
+#         now = time.time()
+#         dt  = max(now - _last_tick_time, 0.001)
+#         _last_tick_time = now
+
+#         s          = ids_instance.stats
+#         cur_pkts   = s['total_packets']
+#         cur_bytes  = s['total_bytes']
+#         cur_alerts = s['alerts']
+
+#         pps        = (cur_pkts  - _last_pkt_count)  / dt
+#         bps        = (cur_bytes - _last_byte_count)  / dt
+#         new_alerts = cur_alerts - _last_alert_count
+
+#         _last_pkt_count   = cur_pkts
+#         _last_byte_count  = cur_bytes
+#         _last_alert_count = cur_alerts
+
+#         with timeline_lock:
+#             timeline_pps.append(round(pps, 1))
+#             timeline_bps.append(round(bps / 1024, 1))
+#             timeline_alerts.append(new_alerts)
+#             timeline_labels.append(datetime.now().strftime('%H:%M:%S'))
+
+#         up = (datetime.now() - s['start_time']).total_seconds()
+#         payload = {
+#             'total_packets': s['total_packets'],
+#             'total_bytes':   s['total_bytes'],
+#             'alerts':        s['alerts'],
+#             'unique_ips':    len(ids_instance.connections),
+#             'tcp':  s['tcp'],  'udp': s['udp'],
+#             'icmp': s['icmp'], 'arp': s['arp'], 'dns': s['dns'],
+#             'pps':     round(pps, 1),
+#             'bps_kb':  round(bps / 1024, 1),
+#             'uptime_s':   round(up, 0),
+#             'ml_trained': ids_instance.ensemble.trained,
+#             'pcap_files': len(ids_instance.pcap_mgr.list_files()),
+#             'interface':  ids_instance.interface,
+#             'alert_counts': dict(ids_instance.alert_counts),
+#             'top_threats': [
+#                 {'ip': ip, 'score': round(sc, 1), 'tags': list(set(ev))[:3]}
+#                 for ip, sc, ev in ids_instance.scoreboard.top_threats(5)
+#             ],
+#         }
+#         socketio.emit('stats_update', payload, namespace='/')
+
+
+# # ── REST API ──────────────────────────────────────────────────────────
+# def _ids_required(f):
+#     from functools import wraps
+#     @wraps(f)
+#     def wrapper(*args, **kwargs):
+#         if not ids_instance:
+#             return jsonify({'error': 'IDS not running'}), 503
+#         return f(*args, **kwargs)
+#     return wrapper
+
+
+# @app.route('/')
+# def index():
+#     return DASHBOARD_HTML, 200, {'Content-Type': 'text/html'}
+
+
+# @app.route('/api/stats')
+# @_ids_required
+# def api_stats():
+#     s  = ids_instance.stats
+#     up = (datetime.now() - s['start_time']).total_seconds()
+#     return jsonify({
+#         **{k: (v.isoformat() if isinstance(v, datetime) else v) for k, v in s.items()},
+#         'uptime_s':   round(up, 1),
+#         'unique_ips': len(ids_instance.connections),
+#         'ml_trained': ids_instance.ensemble.trained,
+#     })
+
+
+# @app.route('/api/alerts')
+# @_ids_required
+# def api_alerts():
+#     limit  = min(int(request.args.get('limit', 50)), 500)
+#     sev    = request.args.get('severity')
+#     alerts = list(ids_instance.alerts)
+#     if sev:
+#         alerts = [a for a in alerts if a.get('severity', '').lower() == sev.lower()]
+#     return jsonify(alerts[-limit:])
+
+
+# @app.route('/api/threats')
+# @_ids_required
+# def api_threats():
+#     n = int(request.args.get('n', 20))
+#     return jsonify([
+#         {'ip': ip, 'score': round(sc, 1),
+#          'evidence':   list(set(ev))[:10],
+#          'reputation': round(ids_instance.threat_intel.get_reputation(ip), 3),
+#          'geo':        ids_instance.threat_intel.geolocate(ip)}
+#         for ip, sc, ev in ids_instance.scoreboard.top_threats(n)
+#     ])
+
+
+# @app.route('/api/timeline')
+# def api_timeline():
+#     with timeline_lock:
+#         return jsonify({
+#             'labels': list(timeline_labels),
+#             'pps':    list(timeline_pps),
+#             'bps_kb': list(timeline_bps),
+#             'alerts': list(timeline_alerts),
+#         })
+
+
+# @app.route('/api/top_ips')
+# @_ids_required
+# def api_top_ips():
+#     n    = int(request.args.get('n', 10))
+#     rows = sorted(ids_instance.connections.items(),
+#                   key=lambda kv: kv[1]['pkt_count'], reverse=True)[:n]
+#     return jsonify([
+#         {'ip': ip, 'packets': c['pkt_count'], 'bytes': c['bytes'],
+#          'ports': len(c['ports']),
+#          'score': round(ids_instance.scoreboard.get_score(ip), 1),
+#          'geo':   ids_instance.threat_intel.geolocate(ip)}
+#         for ip, c in rows
+#     ])
+
+
+# @app.route('/api/alert_counts')
+# @_ids_required
+# def api_alert_counts():
+#     return jsonify(dict(ids_instance.alert_counts))
+
+
+# @app.route('/api/pcap_files')
+# @_ids_required
+# def api_pcap_files():
+#     files = ids_instance.pcap_mgr.list_files()
+#     return jsonify([
+#         {'name': os.path.basename(f),
+#          'size_kb': round(os.path.getsize(f) / 1024, 1), 'path': f}
+#         for f in files
+#     ])
+
+
+# @app.route('/api/health')
+# def api_health():
+#     return jsonify({'status': 'ok', 'ids_running': ids_running, 'version': '2.1.0'})
+
+
+# @app.route('/api/thresholds')
+# @_ids_required
+# def api_thresholds():
+#     return jsonify(ids_instance.adapt_thr.snapshot())
+
+
+# # ── SocketIO ──────────────────────────────────────────────────────────
+# @socketio.on('connect')
+# def on_connect():
+#     if ids_instance:
+#         emit('ids_status', {'running': ids_running, 'interface': ids_instance.interface})
+
+
+# @socketio.on('request_timeline')
+# def on_request_timeline():
+#     with timeline_lock:
+#         emit('timeline_data', {
+#             'labels': list(timeline_labels),
+#             'pps':    list(timeline_pps),
+#             'bps_kb': list(timeline_bps),
+#             'alerts': list(timeline_alerts),
+#         })
+
+
+# @socketio.on('request_top_threats')
+# def on_request_top_threats():
+#     if ids_instance:
+#         emit('top_threats', [
+#             {'ip': ip, 'score': round(sc, 1), 'tags': list(set(ev))[:3]}
+#             for ip, sc, ev in ids_instance.scoreboard.top_threats(10)
+#         ])
+
+
+# # ── IDS lifecycle ─────────────────────────────────────────────────────
+# def start_ids(cfg: dict):
+#     global ids_instance, ids_running
+#     ids_instance = AdvancedNetworkIDS(cfg)
+#     _patch_ids_alerts(ids_instance)
+#     ids_instance.start()
+#     ids_running = True
+#     threading.Thread(target=_broadcaster, daemon=True).start()
+#     print("✅  Dashboard broadcaster started")
+
+
+# # ─────────────────────────────────────────────────────────────────────
+# # DASHBOARD HTML
+# # ─────────────────────────────────────────────────────────────────────
+# DASHBOARD_HTML = """<!DOCTYPE html>
+# <html lang="en">
+# <head>
+# <meta charset="UTF-8">
+# <meta name="viewport" content="width=device-width, initial-scale=1.0">
+# <title>Network IDS Dashboard</title>
+# <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+# <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+# <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+# <style>
+#   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+#   :root {
+#     --bg:         #f0f2f5;
+#     --surface:    #ffffff;
+#     --border:     #e2e6ea;
+#     --text:       #1a1d23;
+#     --text-muted: #6b7280;
+#     --primary:    #2563eb;
+#     --success:    #16a34a;
+#     --warning:    #d97706;
+#     --danger:     #dc2626;
+#     --info:       #0891b2;
+#     --radius:     10px;
+#     --shadow:     0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.05);
+#   }
+#   html, body { height: 100%; background: var(--bg); color: var(--text);
+#                font-family: 'Inter', system-ui, sans-serif; font-size: 14px; }
+#   .app { display: flex; flex-direction: column; min-height: 100vh; }
+
+#   /* Topbar */
+#   .topbar {
+#     background: var(--surface); border-bottom: 1px solid var(--border);
+#     padding: 0 24px; height: 56px;
+#     display: flex; align-items: center; justify-content: space-between;
+#     position: sticky; top: 0; z-index: 50; box-shadow: var(--shadow);
+#   }
+#   .topbar-logo { font-size: 16px; font-weight: 700; }
+#   .topbar-logo span { color: var(--primary); }
+#   .topbar-right { display: flex; align-items: center; gap: 16px; }
+#   .topbar-meta { font-size: 12px; color: var(--text-muted); }
+
+#   .badge { display:inline-flex; align-items:center; gap:5px; padding:3px 10px;
+#            border-radius:20px; font-size:11px; font-weight:600; }
+#   .badge-blue  { background:#eff6ff; color:var(--primary); border:1px solid #bfdbfe; }
+#   .badge-green { background:#f0fdf4; color:var(--success); border:1px solid #bbf7d0; }
+#   .badge-red   { background:#fef2f2; color:var(--danger);  border:1px solid #fecaca; }
+#   .badge-amber { background:#fffbeb; color:var(--warning); border:1px solid #fde68a; }
+
+#   .dot { display:inline-block; width:8px; height:8px; border-radius:50%; margin-right:4px; }
+#   .dot-green { background:var(--success); box-shadow:0 0 0 3px rgba(22,163,74,.15); }
+#   .dot-red   { background:var(--danger); }
+#   .dot-pulse { animation:pulse 2s ease infinite; }
+#   @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+#   /* Layout */
+#   .content { display:grid; grid-template-columns:240px 1fr; flex:1; }
+
+#   /* Sidebar */
+#   .sidebar { background:var(--surface); border-right:1px solid var(--border);
+#              padding:20px 16px; display:flex; flex-direction:column; gap:20px; overflow-y:auto; }
+#   .section-label { font-size:10px; font-weight:600; letter-spacing:.08em;
+#                    text-transform:uppercase; color:var(--text-muted); margin-bottom:12px; }
+#   .kpi-row { display:flex; justify-content:space-between; align-items:center;
+#              padding:6px 0; border-bottom:1px solid var(--border); }
+#   .kpi-row:last-child { border-bottom:none; }
+#   .kpi-label { font-size:12px; color:var(--text-muted); }
+#   .kpi-value { font-size:15px; font-weight:600; }
+#   .kpi-value.red   { color:var(--danger); }
+#   .kpi-value.green { color:var(--success); }
+#   .kpi-value.blue  { color:var(--primary); }
+
+#   .proto-grid { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
+#   .proto-pill { background:var(--bg); border:1px solid var(--border); border-radius:8px;
+#                 padding:8px 10px; text-align:center; }
+#   .proto-name  { font-size:10px; color:var(--text-muted); font-weight:500;
+#                  text-transform:uppercase; }
+#   .proto-value { font-size:16px; font-weight:700; margin-top:2px; }
+
+#   .threat-item  { margin-bottom:12px; }
+#   .threat-header { display:flex; justify-content:space-between; margin-bottom:4px; }
+#   .threat-ip    { font-size:12px; font-weight:500; font-family:monospace; }
+#   .threat-score { font-size:11px; font-weight:600; color:var(--danger); }
+#   .threat-track { height:5px; background:var(--border); border-radius:3px; overflow:hidden; }
+#   .threat-fill  { height:100%; border-radius:3px;
+#                   background:linear-gradient(90deg,var(--primary),var(--danger));
+#                   transition:width .5s ease; }
+#   .threat-tags  { font-size:10px; color:var(--text-muted); margin-top:3px; }
+
+#   /* Main */
+#   .main { padding:20px; display:flex; flex-direction:column; gap:16px; overflow-y:auto; }
+
+#   .chips { display:flex; gap:6px; flex-wrap:wrap; }
+#   .chip  { font-size:11px; font-weight:500; padding:4px 10px; border-radius:20px;
+#            border:1px solid var(--border); background:var(--surface); color:var(--text-muted);
+#            display:flex; align-items:center; gap:5px; }
+#   .chip.active { background:#f0fdf4; color:var(--success); border-color:#bbf7d0; }
+#   .chip-dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+
+#   .stat-cards { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+#   .stat-card  { background:var(--surface); border:1px solid var(--border);
+#                 border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow); }
+#   .stat-card-label { font-size:11px; color:var(--text-muted); font-weight:500;
+#                      text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
+#   .stat-card-value { font-size:26px; font-weight:700; line-height:1; }
+#   .stat-card-value.danger  { color:var(--danger); }
+#   .stat-card-value.success { color:var(--success); }
+#   .stat-card-sub  { font-size:11px; color:var(--text-muted); margin-top:4px; }
+#   .stat-card-icon { float:right; font-size:20px; opacity:.5; }
+
+#   .panel { background:var(--surface); border:1px solid var(--border);
+#            border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow); }
+#   .panel-header { display:flex; justify-content:space-between; align-items:center;
+#                   margin-bottom:14px; }
+#   .panel-title { font-size:13px; font-weight:600; }
+#   .panel-sub   { font-size:11px; color:var(--text-muted); }
+
+#   .charts-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+#   .chart-wrap { height:150px; position:relative; }
+
+#   .alerts-list { display:flex; flex-direction:column; gap:8px;
+#                  max-height:420px; overflow-y:auto; }
+#   .alerts-list::-webkit-scrollbar { width:4px; }
+#   .alerts-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+
+#   .alert-item { display:grid; grid-template-columns:auto 1fr auto; gap:12px;
+#                 align-items:start; padding:11px 14px; border-radius:8px;
+#                 border:1px solid var(--border); border-left:3px solid var(--danger);
+#                 background:#fff9f9; animation:fadeIn .3s ease; }
+#   .alert-item.high   { border-left-color:var(--warning); background:#fffdf5; }
+#   .alert-item.medium { border-left-color:var(--info);    background:#f5fbff; }
+#   .alert-item.low    { border-left-color:var(--success); background:#f6fef9; }
+#   @keyframes fadeIn { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:none} }
+
+#   .alert-ts   { font-size:11px; color:var(--text-muted); white-space:nowrap;
+#                 padding-top:1px; font-family:monospace; }
+#   .alert-type { font-size:13px; font-weight:600; margin-bottom:2px; }
+#   .alert-meta { font-size:11px; color:var(--text-muted); }
+#   .alert-desc { font-size:11px; color:var(--text-muted); margin-top:2px; font-style:italic; }
+
+#   .sev-pill { padding:2px 9px; border-radius:20px; font-size:10px;
+#               font-weight:700; letter-spacing:.04em; white-space:nowrap; align-self:start; }
+#   .sev-critical { background:#fef2f2; color:var(--danger);  border:1px solid #fecaca; }
+#   .sev-high     { background:#fffbeb; color:var(--warning); border:1px solid #fde68a; }
+#   .sev-medium   { background:#ecfeff; color:var(--info);    border:1px solid #a5f3fc; }
+#   .sev-low      { background:#f0fdf4; color:var(--success); border:1px solid #bbf7d0; }
+
+#   .empty-state { text-align:center; padding:40px; color:var(--text-muted); font-size:13px; }
+#   ::-webkit-scrollbar { width:5px; }
+#   ::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+# </style>
+# </head>
+# <body>
+# <div class="app">
+
+#   <header class="topbar">
+#     <div style="display:flex;align-items:center;gap:12px">
+#       <div class="topbar-logo">Network <span>IDS</span></div>
+#       <span class="badge badge-red" id="conn-badge">
+#         <span class="dot dot-red" id="conn-dot"></span>Connecting…
+#       </span>
+#     </div>
+#     <div class="topbar-right">
+#       <span class="topbar-meta" id="iface-label">Interface: —</span>
+#       <span class="topbar-meta" id="uptime-label">Uptime: 0s</span>
+#       <span class="badge badge-red" id="ml-badge">ML Training</span>
+#     </div>
+#   </header>
+
+#   <div class="content">
+
+#     <aside class="sidebar">
+#       <div>
+#         <div class="section-label">Traffic</div>
+#         <div class="kpi-row"><span class="kpi-label">Packets</span>  <span class="kpi-value" id="s-pkts">0</span></div>
+#         <div class="kpi-row"><span class="kpi-label">Bytes</span>    <span class="kpi-value" id="s-bytes">0 B</span></div>
+#         <div class="kpi-row"><span class="kpi-label">Pkt/sec</span>  <span class="kpi-value green" id="s-pps">0</span></div>
+#         <div class="kpi-row"><span class="kpi-label">KB/s</span>     <span class="kpi-value blue" id="s-bps">0</span></div>
+#       </div>
+#       <div>
+#         <div class="section-label">Detection</div>
+#         <div class="kpi-row"><span class="kpi-label">Alerts</span>     <span class="kpi-value red" id="s-alerts">0</span></div>
+#         <div class="kpi-row"><span class="kpi-label">Unique IPs</span> <span class="kpi-value" id="s-ips">0</span></div>
+#         <div class="kpi-row"><span class="kpi-label">PCAP Files</span> <span class="kpi-value" id="s-pcap">0</span></div>
+#       </div>
+#       <div>
+#         <div class="section-label">Protocols</div>
+#         <div class="proto-grid">
+#           <div class="proto-pill"><div class="proto-name">TCP</div>  <div class="proto-value" id="p-tcp">0</div></div>
+#           <div class="proto-pill"><div class="proto-name">UDP</div>  <div class="proto-value" id="p-udp">0</div></div>
+#           <div class="proto-pill"><div class="proto-name">ICMP</div> <div class="proto-value" id="p-icmp">0</div></div>
+#           <div class="proto-pill"><div class="proto-name">ARP</div>  <div class="proto-value" id="p-arp">0</div></div>
+#           <div class="proto-pill"><div class="proto-name">DNS</div>  <div class="proto-value" id="p-dns">0</div></div>
+#           <div class="proto-pill"><div class="proto-name">Other</div><div class="proto-value" id="p-other">0</div></div>
+#         </div>
+#       </div>
+#       <div style="flex:1">
+#         <div class="section-label">Top Threat IPs</div>
+#         <div id="threat-list"><p class="empty-state" style="padding:16px 0;font-size:11px">No threats yet</p></div>
+#       </div>
+#     </aside>
+
+#     <main class="main">
+
+#       <div class="chips">
+#         <div class="chip active"><span class="chip-dot"></span> Signatures</div>
+#         <div class="chip active"><span class="chip-dot"></span> ML Ensemble</div>
+#         <div class="chip active"><span class="chip-dot"></span> UEBA</div>
+#         <div class="chip active"><span class="chip-dot"></span> Beaconing</div>
+#         <div class="chip active"><span class="chip-dot"></span> DNS Analysis</div>
+#         <div class="chip active"><span class="chip-dot"></span> ARP Spoof</div>
+#         <div class="chip active"><span class="chip-dot"></span> Threat Intel</div>
+#       </div>
+
+#       <div class="stat-cards">
+#         <div class="stat-card">
+#           <div class="stat-card-icon">📦</div>
+#           <div class="stat-card-label">Total Packets</div>
+#           <div class="stat-card-value" id="c-pkts">0</div>
+#           <div class="stat-card-sub" id="c-pps-sub">0 pkt/s</div>
+#         </div>
+#         <div class="stat-card">
+#           <div class="stat-card-icon">🚨</div>
+#           <div class="stat-card-label">Alerts</div>
+#           <div class="stat-card-value danger" id="c-alerts">0</div>
+#           <div class="stat-card-sub" id="c-alert-sub">none yet</div>
+#         </div>
+#         <div class="stat-card">
+#           <div class="stat-card-icon">🌐</div>
+#           <div class="stat-card-label">Unique IPs</div>
+#           <div class="stat-card-value" id="c-ips">0</div>
+#           <div class="stat-card-sub">tracked hosts</div>
+#         </div>
+#         <div class="stat-card">
+#           <div class="stat-card-icon">💾</div>
+#           <div class="stat-card-label">Data Processed</div>
+#           <div class="stat-card-value" id="c-bytes">0 B</div>
+#           <div class="stat-card-sub" id="c-bps-sub">0 KB/s</div>
+#         </div>
+#       </div>
+
+#       <div class="charts-row">
+#         <div class="panel">
+#           <div class="panel-header">
+#             <span class="panel-title">Packets / sec</span>
+#             <span class="panel-sub" id="pps-current">0</span>
+#           </div>
+#           <div class="chart-wrap"><canvas id="ch-pps"></canvas></div>
+#         </div>
+#         <div class="panel">
+#           <div class="panel-header">
+#             <span class="panel-title">Bandwidth (KB/s)</span>
+#             <span class="panel-sub" id="bps-current">0</span>
+#           </div>
+#           <div class="chart-wrap"><canvas id="ch-bps"></canvas></div>
+#         </div>
+#         <div class="panel">
+#           <div class="panel-header"><span class="panel-title">Attack Distribution</span></div>
+#           <div class="chart-wrap"><canvas id="ch-atk"></canvas></div>
+#         </div>
+#       </div>
+
+#       <div class="panel">
+#         <div class="panel-header">
+#           <span class="panel-title">Alert Timeline</span>
+#           <span class="panel-sub">last 120s</span>
+#         </div>
+#         <div style="height:90px;position:relative"><canvas id="ch-timeline"></canvas></div>
+#       </div>
+
+#       <div class="panel">
+#         <div class="panel-header">
+#           <span class="panel-title">Alert Feed</span>
+#           <span class="panel-sub" id="alert-count">0 events</span>
+#         </div>
+#         <div class="alerts-list" id="alerts-list">
+#           <div class="empty-state">Monitoring… no alerts yet.</div>
+#         </div>
+#       </div>
+
+#     </main>
+#   </div>
+# </div>
+
+# <script>
+# const socket = io();
+# let alertCount = 0;
+
+# socket.on('connect',    () => setConn(true));
+# socket.on('disconnect', () => setConn(false));
+# socket.on('connect', () => socket.emit('request_timeline'));
+
+# function setConn(on) {
+#   const b = document.getElementById('conn-badge');
+#   const d = document.getElementById('conn-dot');
+#   b.textContent = on ? '● Live' : '● Disconnected';
+#   b.className   = 'badge ' + (on ? 'badge-green' : 'badge-red');
+#   d.className   = 'dot ' + (on ? 'dot-green dot-pulse' : 'dot-red');
+# }
+
+# /* Charts */
+# const BLUE  = '#2563eb', GREEN = '#16a34a', RED = '#dc2626',
+#       AMBER = '#d97706', GRID  = 'rgba(0,0,0,.06)', TICK = '#9ca3af';
+# Chart.defaults.font.family = "'Inter', system-ui, sans-serif";
+# Chart.defaults.font.size   = 11;
+# Chart.defaults.color       = TICK;
+
+# function makeSparkline(id, color) {
+#   return new Chart(document.getElementById(id), {
+#     type: 'line',
+#     data: { labels: [], datasets: [{ data: [], borderColor: color,
+#       borderWidth: 2, backgroundColor: color + '18', tension: 0.4,
+#       fill: true, pointRadius: 0 }] },
+#     options: {
+#       responsive: true, maintainAspectRatio: false, animation: false,
+#       plugins: { legend: { display: false } },
+#       scales: {
+#         x: { display: false },
+#         y: { beginAtZero: true, grid: { color: GRID },
+#              ticks: { maxTicksLimit: 4, color: TICK } }
+#       }
+#     }
+#   });
+# }
+
+# const chartPPS      = makeSparkline('ch-pps',      BLUE);
+# const chartBPS      = makeSparkline('ch-bps',      GREEN);
+# const chartTimeline = makeSparkline('ch-timeline', RED);
+
+# const chartAtk = new Chart(document.getElementById('ch-atk'), {
+#   type: 'doughnut',
+#   data: { labels: [], datasets: [{ data: [], borderWidth: 2, borderColor: '#fff',
+#     backgroundColor: [RED, AMBER, BLUE, GREEN, '#8b5cf6','#06b6d4','#f59e0b','#6b7280'] }] },
+#   options: {
+#     responsive: true, maintainAspectRatio: false, animation: false, cutout: '60%',
+#     plugins: { legend: { position: 'right',
+#       labels: { color: '#374151', boxWidth: 10, font: { size: 10 } } } }
+#   }
+# });
+
+# function pushSpark(chart, labels, data) {
+#   chart.data.labels = labels;
+#   chart.data.datasets[0].data = data;
+#   chart.update('none');
+# }
+
+# /* Stats */
+# socket.on('stats_update', s => {
+#   set('s-pkts',   fmt(s.total_packets));
+#   set('s-bytes',  fmtBytes(s.total_bytes));
+#   set('s-pps',    s.pps.toFixed(1));
+#   set('s-bps',    s.bps_kb.toFixed(1));
+#   set('s-alerts', s.alerts);
+#   set('s-ips',    s.unique_ips);
+#   set('s-pcap',   s.pcap_files);
+#   set('p-tcp',    fmt(s.tcp));
+#   set('p-udp',    fmt(s.udp));
+#   set('p-icmp',   fmt(s.icmp));
+#   set('p-arp',    fmt(s.arp));
+#   set('p-dns',    fmt(s.dns));
+#   set('p-other',  fmt(Math.max(0, s.total_packets - s.tcp - s.udp - s.icmp - s.arp - s.dns)));
+
+#   const up = s.uptime_s;
+#   const h = Math.floor(up/3600), m = Math.floor((up%3600)/60), sc = Math.floor(up%60);
+#   set('uptime-label', `Uptime: ${h ? h+'h ' : ''}${m}m ${sc}s`);
+#   set('iface-label',  `Interface: ${s.interface || '—'}`);
+
+#   const ml = document.getElementById('ml-badge');
+#   ml.textContent = s.ml_trained ? 'ML Active' : 'ML Training';
+#   ml.className   = 'badge ' + (s.ml_trained ? 'badge-green' : 'badge-amber');
+
+#   set('c-pkts',    fmt(s.total_packets));
+#   set('c-pps-sub', s.pps.toFixed(1) + ' pkt/s');
+#   set('c-alerts',  s.alerts);
+#   set('c-ips',     s.unique_ips);
+#   set('c-bytes',   fmtBytes(s.total_bytes));
+#   set('c-bps-sub', s.bps_kb.toFixed(1) + ' KB/s');
+#   set('pps-current', s.pps.toFixed(1) + ' pkt/s');
+#   set('bps-current', s.bps_kb.toFixed(1) + ' KB/s');
+
+#   const counts = s.alert_counts || {};
+#   if (Object.keys(counts).length) {
+#     chartAtk.data.labels = Object.keys(counts);
+#     chartAtk.data.datasets[0].data = Object.values(counts);
+#     chartAtk.update('none');
+#   }
+
+#   renderThreats(s.top_threats || []);
+# });
+
+# /* Timeline */
+# socket.on('timeline_data', d => {
+#   pushSpark(chartPPS,      d.labels, d.pps);
+#   pushSpark(chartBPS,      d.labels, d.bps_kb);
+#   pushSpark(chartTimeline, d.labels, d.alerts);
+# });
+# setInterval(() => {
+#   fetch('/api/timeline').then(r => r.json()).then(d => {
+#     pushSpark(chartPPS,      d.labels, d.pps);
+#     pushSpark(chartBPS,      d.labels, d.bps_kb);
+#     pushSpark(chartTimeline, d.labels, d.alerts);
+#   }).catch(() => {});
+# }, 2000);
+
+# /* Alerts */
+# socket.on('new_alert', a => {
+#   alertCount++;
+#   set('alert-count', alertCount + ' events');
+#   prependAlert(a);
+# });
+
+# function prependAlert(a) {
+#   const list = document.getElementById('alerts-list');
+#   if (list.querySelector('.empty-state')) list.innerHTML = '';
+#   const sev      = (a.severity || 'low').toLowerCase();
+#   const rowCls   = sev === 'critical' ? '' : sev;
+#   const sevCls   = 'sev-' + sev;
+#   const ts       = new Date(a.timestamp).toLocaleTimeString();
+#   const geo      = a.geo ? `${a.geo.city ? a.geo.city+', ' : ''}${a.geo.country || ''}` : '';
+#   const score    = a.composite_score != null ? ` — Score: ${a.composite_score}` : '';
+#   const desc     = a.details?.description || '';
+#   const div = document.createElement('div');
+#   div.className = 'alert-item ' + rowCls;
+#   div.innerHTML = `
+#     <span class="alert-ts">${ts}</span>
+#     <div>
+#       <div class="alert-type">${esc(a.attack_type)}</div>
+#       <div class="alert-meta">${esc(a.src_ip)}${geo ? '  ·  '+esc(geo) : ''}${score}</div>
+#       ${desc ? `<div class="alert-desc">${esc(desc)}</div>` : ''}
+#     </div>
+#     <span class="sev-pill ${sevCls}">${a.severity}</span>`;
+#   list.insertBefore(div, list.firstChild);
+#   while (list.children.length > 60) list.removeChild(list.lastChild);
+# }
+
+# function renderThreats(threats) {
+#   const el = document.getElementById('threat-list');
+#   if (!threats.length) {
+#     el.innerHTML = '<p class="empty-state" style="padding:12px 0;font-size:11px">No threats scored yet</p>';
+#     return;
+#   }
+#   el.innerHTML = threats.map(t => `
+#     <div class="threat-item">
+#       <div class="threat-header">
+#         <span class="threat-ip">${t.ip}</span>
+#         <span class="threat-score">${t.score.toFixed(0)}/100</span>
+#       </div>
+#       <div class="threat-track">
+#         <div class="threat-fill" style="width:${Math.min(t.score,100)}%"></div>
+#       </div>
+#       <div class="threat-tags">${(t.tags||[]).slice(0,2).join(' · ')}</div>
+#     </div>`).join('');
+# }
+
+# function set(id, val) { const e=document.getElementById(id); if(e) e.textContent=val; }
+# function fmt(n) {
+#   n = Number(n)||0;
+#   if(n>=1e9) return (n/1e9).toFixed(1)+'G';
+#   if(n>=1e6) return (n/1e6).toFixed(1)+'M';
+#   if(n>=1e3) return (n/1e3).toFixed(1)+'K';
+#   return n;
+# }
+# function fmtBytes(b) {
+#   if(b>=1<<30) return (b/(1<<30)).toFixed(2)+' GB';
+#   if(b>=1<<20) return (b/(1<<20)).toFixed(1)+' MB';
+#   if(b>=1<<10) return Math.round(b/(1<<10))+' KB';
+#   return b+' B';
+# }
+# function esc(s) {
+#   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+# }
+# </script>
+# </body>
+# </html>
+# """
+
+# # ─────────────────────────────────────────────────────────────────────
+# if __name__ == '__main__':
+#     ap = argparse.ArgumentParser(description='Network IDS Dashboard v2.1')
+#     ap.add_argument('-c', '--config',    default=None)
+#     ap.add_argument('-i', '--interface', default=None)
+#     ap.add_argument('-p', '--port',      type=int, default=5001)
+#     ap.add_argument('--no-ids',          action='store_true')
+#     args = ap.parse_args()
+
+#     if not args.no_ids:
+#         cfg = load_config(args.config)
+#         if args.interface:
+#             cfg['interface'] = args.interface
+#         cfg['enable_api'] = False
+#         ids_thread = threading.Thread(target=start_ids, args=(cfg,), daemon=True)
+#         ids_thread.start()
+#         time.sleep(2)
+
+#     print(f"\n🌐  Dashboard  →  http://localhost:{args.port}")
+#     print(f"   /api/stats | /api/alerts | /api/threats | /api/timeline")
+#     print(f"   Press Ctrl+C to stop\n")
+
+#     try:
+#         socketio.run(app, host='0.0.0.0', port=args.port, debug=False, use_reloader=False)
+#     except KeyboardInterrupt:
+#         ids_running = False
+#         if ids_instance:
+#             ids_instance.stop()
+
+
+
 """
 Advanced Network IDS — Web Dashboard v2.1
 Fixed: _patch_ids_alerts now passes **kwargs so cooldown_key etc. work correctly.
@@ -2442,19 +3225,19 @@ def _alert_hook(alert: dict):
 
 def _patch_ids_alerts(ids: AdvancedNetworkIDS):
     """
-    Wraps ids._alert so every fired alert is also broadcast to the dashboard.
+    Wraps ids._alert so every NEW alert is broadcast to the dashboard exactly once.
 
-    IMPORTANT: the wrapper must accept *args and **kwargs so it is transparent
-    to any signature changes in _alert (e.g. the keyword-only cooldown_key,
-    cooldown_override args added in v2.1).
+    Key fix: snapshot len(ids.alerts) BEFORE calling _orig. If it grew by 1
+    after the call, a real alert was appended and we emit it. If _orig returned
+    early (cooldown suppressed it), len stays the same and we emit nothing.
     """
     _orig = ids._alert
 
     def patched(*args, **kwargs):
-        # Call the real _alert — this handles cooldown, dedup, saving, etc.
+        count_before = len(ids.alerts)
         _orig(*args, **kwargs)
-        # After it returns, the last entry in ids.alerts (if any) is the new one.
-        if ids.alerts:
+        # Only broadcast if a new alert was actually appended
+        if len(ids.alerts) > count_before:
             _alert_hook(dict(ids.alerts[-1]))
 
     ids._alert = patched
@@ -2504,7 +3287,7 @@ def _broadcaster():
             'bps_kb':  round(bps / 1024, 1),
             'uptime_s':   round(up, 0),
             'ml_trained': ids_instance.ensemble.trained,
-            'pcap_files': len(ids_instance.pcap_mgr.list_files()),
+            'pcap_files': len(ids_instance.pcap_mgr.list_files()) + (1 if ids_instance.pcap_mgr._buf else 0),
             'interface':  ids_instance.interface,
             'alert_counts': dict(ids_instance.alert_counts),
             'top_threats': [
@@ -2627,6 +3410,10 @@ def api_thresholds():
 def on_connect():
     if ids_instance:
         emit('ids_status', {'running': ids_running, 'interface': ids_instance.interface})
+        # Send the last 50 alerts so the feed is populated immediately on (re)connect
+        recent = list(ids_instance.alerts)[-50:]
+        for a in recent:
+            emit('new_alert', dict(a))
 
 
 @socketio.on('request_timeline')
@@ -3166,5 +3953,4 @@ if __name__ == '__main__':
         ids_running = False
         if ids_instance:
             ids_instance.stop()
-
 
