@@ -2386,7 +2386,7 @@
 #             ids_instance.stop()
 
 
- """
+"""
 Advanced Network IDS — Web Dashboard v2.1
 Fixed: _patch_ids_alerts now passes **kwargs so cooldown_key etc. work correctly.
 """
